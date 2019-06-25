@@ -1,0 +1,470 @@
+%This is the foraging task for human psychphysics; 
+%first version by YXF 05152019
+% Clear the window and the buffle:
+sca;
+close all;
+clearvars;
+commandwindow
+% Seed the random number generator. 
+rng('default')
+rng('shuffle')
+%----------------Set up Task parameters--------------------%
+SubjectName='test2';
+SaveFilePath='/Users/yux8/WorkRelated_YXF/Program_Matlab_Local/PsychPhysics/Results/';
+
+WaitSecToInitiatTask=10;%in seconds; The maximum duration to start one block;
+NumTrials=1;%Number of trials in one block;
+TestMode=0;%If the programe is in test-mode, no results will be saved.
+StaircaseMode=0;%If the program is in staircase-mode, the task difficulty will increase with performance.
+UserMaxStep=4;%Range from 2,4,8;If the program is not in staircase mode, the condition will be defined by user;
+UserSceneRepetition=10;%If the program is not in staircase mode, the SceneRepetition will be defined by user;
+RandomFlag=0;%If randomflag==1, the scene order will be randomized.
+ITI=1;%Intertrial interval;in sec
+ChooseShortTol=2;%In staircase mode, ff consecutive two trials are using the shortest path, the scene will change 
+StepType=[2,4,8];
+%-----------------------------------------------------------%
+%----------------Set up screen parameters--------------------%
+ScreenWidthInCM=29;% in cm; 
+ScreenHeightInCM=18;% in cm; 
+ViewingDistance=30;% in cm;
+%----------------Set up Fixation Point parameters--------------------%
+FixationPointColor=[255 0 0];%Fixation point depicted in red;
+FixationPointSizePix = 20;%Fixation point diameter,in pixel;
+%-----------------Set up Guiding Point parameters-------------------------------%
+GuidePointSizePixEach=15;
+GuidePointColorEach=[0,255,0]';
+Eccentricity_guide=200;%in pix;%This is also the eccentricity for the fractals;
+TolerantDev=20;%in pix;%This is the range of the deviation from the guiding points that allowed by the click
+%Set up reward showing frame
+FrameWidthPix=10;
+RewardFrameColor=[255 0 0;0 0 255]';%First column: color for high reward;Second Column: color for low reward
+
+%----------------Set up Fractal and scene parameters--------------------%
+FractalSizeCM=2;%in cm; This is the width and height(the fractal paint cloth should be square)
+SceneSizeCM=15;%in cm; This is the width and height(the screne paint cloth should be square)
+
+%Load fractal images
+FractalPath='/Users/yux8/WorkRelated_YXF/Program_Matlab_Local/PsychPhysics/FractalsForPsychphysics/image/';%Path in mac;
+%FractalPath='Z:\ProgramsInOHLab\HumanPsychphysics_ForagingTask\FractalsForPsychphysics\image/';%Path in windows; Surface pro4;
+%FractalPath='/Users/yux8/WorkRelated_YXF/Program_Matlab_Local/PsychPhysics/FractalsForPsychphysics/New/series1/image/';%Path in mac;
+FractalImage=dir([FractalPath '*.tif']);
+%FractalImage=dir([FractalPath '*.gif']);
+NumberOfFractals=length(FractalImage); 
+FractalName={FractalImage(:).name};
+%----------------Set up Scene parameters--------------------%
+%Load scene images
+ScenesPath='/Users/yux8/WorkRelated_YXF/Program_Matlab_Local/PsychPhysics/ScenesForPsychphysics/';%Path in mac;
+%FractalPath='Z:\ProgramsInOHLab\HumanPsychphysics_ForagingTask\FractalsForPsychphysics\image/';%Path in windows; Surface pro4;
+SceneImage=dir([ScenesPath '*.jpg']);
+NumberOfScenes=length(SceneImage); 
+SceneName={SceneImage(:).name};
+NumberOfScenesUsed=min(NumberOfScenes,floor(NumberOfFractals/2));%Ensure each scene has two fractals;
+NumberOfFractalsUsed=2*NumberOfScenesUsed;
+
+%----------------Determine the relationship between the scene and the fractals-------------------%
+%Each scene has two fractals: One associated with high value, while the
+%other associated with the low value; They are both in the same location;
+TaskConfigFilePath='/Users/yux8/WorkRelated_YXF/Program_Matlab_Local/PsychPhysics/TaskConfig/';
+cd(TaskConfigFilePath);
+
+if ~exist('TaskConfig.mat') %If there is no configuration file, create and save one first;
+
+FractalAngleRelativeToSceneDeg=mod(randperm(NumberOfScenesUsed)*45,360);%Define the rightward direction zero and increases clockwise;
+SceneSeqUsed=1:NumberOfScenesUsed;
+FractalSeqUsed=reshape(randperm(NumberOfFractalsUsed),2,NumberOfFractalsUsed/2);%  The frist row is good object while the second row is bad object;
+SceneNameUsed={SceneName(1:NumberOfScenesUsed)};
+FractalNameUsed={FractalName(1:NumberOfFractalsUsed)};
+%Now save the image configuration into the file;
+TaskConfig.SceneNameUsed=SceneNameUsed;
+TaskConfig.FractalNameUsed=FractalNameUsed;
+TaskConfig.SceneSeqUsed=SceneSeqUsed;
+TaskConfig.FractalSeqUsed=FractalSeqUsed;
+TaskConfig.FractalAngleRelativeToSceneDeg=FractalAngleRelativeToSceneDeg;
+TaskConfig.Setuptime=datestr(now,26);
+savePath = [TaskConfigFilePath 'TaskConfig' '.mat'];
+save(savePath,'TaskConfig');   
+end
+%Load the predefined task configuration;
+load('TaskConfig.mat')
+FractalAngleRelativeToSceneDeg=TaskConfig.FractalAngleRelativeToSceneDeg;
+SceneSeqUsed=TaskConfig.SceneSeqUsed;
+FractalSeqUsed=TaskConfig.FractalSeqUsed;
+TaskConfigType=TaskConfig.Setuptime;
+
+%Set up tials in one block 
+if RandomFlag==1
+    RandSceneIndex=randperm(NumberOfScenesUsed);%Set up the scene index for this block
+else
+    RandSceneIndex=1:NumberOfScenesUsed;
+end
+SceneSeqInBlock=SceneSeqUsed(RandSceneIndex);
+FractalSeqInBlock=FractalSeqUsed(:,RandSceneIndex);
+FractalAngleSeqInBlock=FractalAngleRelativeToSceneDeg(RandSceneIndex);
+
+
+
+
+
+%-----------------Start setting for the display-------------------%
+%PsychDebugWindowConfiguration %to set the transparency level of the whole
+%window, only valid for debuding
+% Default settings for setting up Psychtoolbox
+PsychDefaultSetup(2);
+%Skip the synchronize checking temporally for illustration; just temporally....
+Screen('Preference', 'SkipSyncTests', 1)
+
+% Get the screen numbers. 
+screens = Screen('Screens');
+% Always draw on the remote screen;
+screenNumber = max(screens);
+% Define black and white according to the display of the screen(white will be 1 and black 0).
+white = WhiteIndex(screenNumber);
+black = BlackIndex(screenNumber);
+windowRect=Screen('Rect', screenNumber);
+screenXpixels=windowRect(3);% Get the length of the on screen window in pixels.
+screenYpixels=windowRect(4);% Get the width of the on screen window in pixels.
+[xCenterpixels, yCenterpixels] = RectCenter(windowRect);% Get the centre coordinate of the window in pixels
+
+%Set up fixation point location
+FixationPointLoc_X=xCenterpixels;%Set the fixation point location to the center of the screen;
+FixationPointLoc_Y=yCenterpixels;%Set the fixation point location to the center of the screen;
+FixationPointLoc=[FixationPointLoc_X;FixationPointLoc_Y];
+
+%-----------Definition of the key used in the task-----------------------%
+% Make sure keyboard mapping is the same on all supported operating systems
+% Apple MacOS/X, MS-Windows and GNU/Linux:
+KbName('UnifyKeyNames');
+% Init keyboard responses (caps doesn't matter)
+ExitKey=KbName('q');%
+
+%------------Basic set up for display window----------------------------%
+% Open an on screen window and color the backgrounds black.
+[window, ~] = Screen('OpenWindow', screenNumber, black);
+% Enable alpha blending for anti-aliasing
+Screen('BlendFunction', window, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+% Measure the vertical refresh rate of the monitor
+ifi = Screen('GetFlipInterval', window);
+% Retreive the maximum priority number
+topPriorityLevel = MaxPriority(window);
+Priority(topPriorityLevel);
+%Transform cm to pixel;
+PixPerCM_W=screenXpixels/ScreenWidthInCM;%How many cm does one pixel occupy in width;pix/cm
+PixPerCM_H=screenYpixels/ScreenHeightInCM;%How many cm does one pixel occupy in height;pix/cm
+%Transform the fractal size and scene size into pixel;
+FractalSize_W=FractalSizeCM*PixPerCM_W;
+FractalSize_H=FractalSizeCM*PixPerCM_H;
+SceneLoc=FixationPointLoc;
+SceneSize_W=SceneSizeCM*PixPerCM_W;
+SceneSize_H=SceneSizeCM*PixPerCM_H;
+
+
+%----------------Draw the starting message --------------------------%
+%To tell the subject to press anykey to start one trial;
+%DrawFormattedText(window, 'Are you ready? Please press any key to start!',
+%'center', 'center', WhiteIndex(window));%Display problem in Surface Por4
+Screen('TextSize', window, 40);
+StartMessage='Are you ready? Please press any key to start!';
+WarningMessage='You haven''t start a trial! The window will be closed without save!\n\n Please restart the task!';
+%Screen('DrawText', window, StartMessage,xCenterpixels*0.8, yCenterpixels, WhiteIndex(window));
+DrawFormattedText(window, StartMessage, 'center', 'center',  WhiteIndex(window));
+Screen('Flip', window);
+HideCursor;
+WaitFrameToInitiatTask = round(WaitSecToInitiatTask/ifi);
+
+for i=1:WaitFrameToInitiatTask
+    if KbCheck
+        break;
+    else
+   WaitSecs(ifi);
+    end
+if i==WaitFrameToInitiatTask
+Screen('TextSize', window, 40);
+DrawFormattedText(window,WarningMessage, 'center', 'center',  WhiteIndex(window));    
+%Screen('DrawText', window, WarningMessage,xCenterpixels*0.2, yCenterpixels, WhiteIndex(window));
+Screen('Flip', window);
+WaitSecs(5);
+Screen('Close')
+ShowCursor;
+sca
+end
+end
+
+
+ScenePointer=1;
+CurrentRep=0;
+ChangeSceneCounter=0;
+%------------Set up the trial loop--------------------------------------%
+for i=1:NumTrials
+%---------------First define the current trial condition
+
+if StaircaseMode==1 %If it is a staircase mode
+  if i<3 %Start with the easiest part
+    CurrentTotalStepNumber=2; 
+  else
+      if  i<floor(NumTrials/2)
+           CurrentTotalStepNumber=4; 
+      else
+          CurrentTotalStepNumber=8; 
+      end
+      
+  end   
+   SceneSwitchTol=ChooseShortTol;
+else %If it is a user defined mode
+   SceneSwitchTol=UserSceneRepetition;
+   CurrentTotalStepNumber=UserMaxStep; 
+end
+
+if ChangeSceneCounter>SceneSwitchTol || CurrentRep>UserSceneRepetition
+     ScenePointer=ScenePointer+1; 
+     ChangeSceneCounter=0;
+     CurrentRep=0;
+end
+
+
+CurrentRewardType=randi([1,2],1);%If it is 1, it will be a high reward task, otherwise low reward task;
+%Set up the coordinate for the scene angle and the guiding point
+%location;%Define the righward location 0 and the location of guiding
+%point1; This guiding point1 is always the reward location;
+RewardLocation=1;%The fractal is always under the number 1 guiding dot 
+CurrentSeparationAngle=RandSel(0:45:359,1);%This defines the plane to seperate the guiding dots;
+
+%---------Prepare the scene and fractal stimulus---------------
+if mod(ScenePointer,NumberOfScenesUsed)==0
+CurrentScene=SceneSeqInBlock(NumberOfScenesUsed);   
+CurrentFractal=FractalSeqInBlock(CurrentRewardType,NumberOfScenesUsed);
+CurrentFractalAngle=FractalAngleSeqInBlock(FractalAngleSeqInBlock);
+else
+CurrentScene=SceneSeqInBlock(mod(ScenePointer,NumberOfScenesUsed));
+CurrentFractal=FractalSeqInBlock(CurrentRewardType,mod(ScenePointer,NumberOfScenesUsed));
+CurrentFractalAngle=FractalAngleSeqInBlock(mod(ScenePointer,NumberOfScenesUsed));
+end
+
+%Setup the coordinates of th scene and fracals 
+CurrentSceneImage=imread([ScenesPath SceneName{CurrentScene}]);
+CurrentFractalImage=imread([FractalPath FractalName{CurrentFractal}]);
+texSceneCurrent = Screen('MakeTexture', window, CurrentSceneImage);
+texFractalCurrent = Screen('MakeTexture', window, CurrentFractalImage);
+%Step1: Setup the fractal location on the scene
+[FractalLocWithScene_X,FractalLocWithScene_Y]=pol2cart(CurrentFractalAngle*pi/180,Eccentricity_guide);
+%FractalLocWithScene=FixationPointLoc+[FractalLocWithScene_X;FractalLocWithScene_Y];
+%Step2: Rotate the scene to make the fractals on the scene aligned on the zero position;
+SceneAngle=360-CurrentFractalAngle;%In deg
+SceneAngleRad=SceneAngle*pi/180;
+FractalLocWithScene=[cos(SceneAngleRad) -sin(SceneAngleRad);sin(SceneAngleRad) cos(SceneAngleRad)]*[FractalLocWithScene_X;FractalLocWithScene_Y];
+%Step3: Set up the guiding dots (before rotation), to align with the fractals
+GuidePointSizePix=ones(1,CurrentTotalStepNumber)*GuidePointSizePixEach;
+GuidePointColor=repmat(GuidePointColorEach,1,CurrentTotalStepNumber);
+Position_guide=ones(2,CurrentTotalStepNumber);
+%Set up location, assigned clockwise
+Position_guide(:,1:CurrentTotalStepNumber)=[cos(360*pi/180/CurrentTotalStepNumber*(0:CurrentTotalStepNumber-1))*Eccentricity_guide;sin(360*pi/180/CurrentTotalStepNumber*(0:CurrentTotalStepNumber-1))*Eccentricity_guide];
+%%Step4: Random rotation all for each trial; 
+CurrentSeparationAngleRad=CurrentSeparationAngle*pi/180;%Define the clockwise as the positive angle;
+%Change the coordinates according to the separation angle;
+SceneAngleFinal=SceneAngle+CurrentSeparationAngle;
+FractalLocFinal=FixationPointLoc+[cos(CurrentSeparationAngleRad),-sin(CurrentSeparationAngleRad);sin(CurrentSeparationAngleRad),cos(CurrentSeparationAngleRad)]*FractalLocWithScene;
+Position_guideFinal=FixationPointLoc+[cos(CurrentSeparationAngleRad),-sin(CurrentSeparationAngleRad);sin(CurrentSeparationAngleRad),cos(CurrentSeparationAngleRad)]*Position_guide;
+%Last step, define the drawing region
+baseRectFractal = [0 0 FractalSize_W FractalSize_H];
+centeredRectFractal = CenterRectOnPointd(baseRectFractal, FractalLocFinal(1),FractalLocFinal(2));
+baseRectScene = [0 0 SceneSize_W SceneSize_H];
+centeredRectScene = CenterRectOnPointd(baseRectScene, SceneLoc(1), SceneLoc(2));
+
+%Define the mask location
+baseRectMask = [0 0 screenYpixels screenYpixels];
+centeredRectMask = CenterRectOnPointd(baseRectMask, FixationPointLoc_X, FixationPointLoc_Y);
+CorrdinateOffset=180/CurrentTotalStepNumber;%to make the sepatation plane located between the guiding dots;
+%Make the mask
+% We create a Luminance+Alpha matrix for use as transparency mask:
+% Layer 1 (Luminance) is filled with 'backgroundcolor'.
+% Layer 2 (Transparency aka Alpha) is filled with transparency mask.
+
+maskblob=ones(round(screenYpixels/2)*2, round(screenYpixels/2)*2, 2)*0;%Initilization
+maskblob(:,:,2)=ones(round(screenYpixels/2)*2, round(screenYpixels/2)*2)*255;%Initilization
+masktrans=MaskMaker(CurrentTotalStepNumber,round(screenYpixels/2)*2);%The output is 0-1, to use it, need to multiply 255;
+
+
+%-------------Adding some illustration under the test mode-------------------
+if TestMode
+ ShowTrial = sprintf('Trial %d :',i);
+TrialLoc_x=FixationPointLoc_X;
+TrialLoc_y=FixationPointLoc_Y*0.5;
+Screen('TextSize', window, 40);
+DrawFormattedText(window,ShowTrial,'center', TrialLoc_y,  WhiteIndex(window));
+end
+
+%Draw starting points
+Screen('DrawDots', window, FixationPointLoc, FixationPointSizePix, FixationPointColor, [], 1);
+Screen('Flip', window);
+WaitSecs(2);%Roughly Wait for 0.5 second;
+
+StepIndex=1;
+IntoStep=1;
+ChosenStepIndex=0;
+savedchoice=ones(1,max(StepType))*-1;
+savedMouse=ones(2,max(StepType))*-999;
+
+
+%%Start the step loop
+
+while IntoStep
+   %Make masks according to the current condition
+  maskblob(:,:,2)=maskblob(:,:,2).*masktrans(:,:,ChosenStepIndex+1);
+  masktex=Screen('MakeTexture', window, maskblob);
+  if ChosenStepIndex>0 && ChosenStepIndex~=1
+       StepIndex=StepIndex+1;
+      GuidePointSizePix(ChosenStepIndex)=NaN;%Make the guiding dots of the chosen part disappear 
+  else
+      if ChosenStepIndex==1
+          GuidePointSizePix=GuidePointSizePix*NaN; %If the fractals have been found, no guiding points will be appeared;
+      end
+  end
+  
+  
+  
+  ValidFlag=0;
+  %Draw the stimulus 
+   Screen('DrawTextures', window, [texSceneCurrent,texFractalCurrent,masktex], [], [centeredRectScene',centeredRectFractal',centeredRectMask'], [SceneAngleFinal,0,CorrdinateOffset+CurrentSeparationAngle]);
+   Screen('DrawDots', window, [FixationPointLoc, Position_guideFinal], [FixationPointSizePix GuidePointSizePix], [FixationPointColor' GuidePointColor], [], 1);
+   Screen('Flip', window);
+   if ChosenStepIndex==0
+   %Initialize mouse to the fixation point of the screen at the begining;
+   SetMouse(FixationPointLoc_X, FixationPointLoc_Y, window);
+   ShowCursor(10,window) %Show cursor as a hand; "0: Arrow; 4: Beam; 5: Cross; 10: Hand"
+   end
+   if  ChosenStepIndex==1 %If last trial chose the correct place, the trial stops;
+       IntoStep=0;
+       WaitSecs(0.1);%Stop for 0.1 seconds
+   end
+   while IntoStep && (~ValidFlag)
+   [clicks,Mouse_X,Mouse_Y,whichButton] = GetClicks(window);
+   [ValidFlag,ChosenStepIndex]=ChosenSection(Mouse_X,Mouse_Y,Position_guideFinal,savedchoice,TolerantDev);
+   end
+  
+  savedchoice(StepIndex)=ChosenStepIndex;
+  savedMouse(:,StepIndex)=[Mouse_X,Mouse_Y]';
+end
+%Draw the whole stimulus and the reward condition at the end 
+if TestMode
+  if CurrentRewardType==1 
+      RewardStr='High Reward!';
+  else
+     RewardStr='Low Reward!';
+  end
+RewardLoc_x=100;
+RewardLoc_y=100;
+Screen('TextSize', window, 40);
+DrawFormattedText(window, RewardStr,RewardLoc_x, RewardLoc_y,  WhiteIndex(window));
+end
+
+
+   Screen('DrawTextures', window, [texSceneCurrent,texFractalCurrent], [], [centeredRectScene',centeredRectFractal'], [SceneAngleFinal,0]);
+   Screen('DrawDots', window, FixationPointLoc, FixationPointSizePix, FixationPointColor', [], 1);
+   Screen('FrameRect', window, RewardFrameColor(:,CurrentRewardType), centeredRectFractal, FrameWidthPix);%Make the frame location the same as the reward
+   
+   Screen('Flip', window);
+   WaitSecs(2);%Show image for 1 seconds
+   Screen('Flip', window);%One trial ends here; close all the images on the sceen;
+   HideCursor;
+   %Prepare next trial;
+   if StaircaseMode==1
+    ChangeSceneCounter=ChangeSceneCounter+(StepIndex<SceneSwitchTol+1);   
+   else
+    ChangeSceneCounter=ChangeSceneCounter+1; 
+   end
+   
+   CurrentRep=CurrentRep+1;
+   
+   
+   
+   
+   %Save the current trial
+   Results.ChoiceSeq(i,:)=savedchoice;
+   Results.RewardType(i)=CurrentRewardType;
+   Results.SceneIndex(i)=CurrentScene;
+   Results.FractalIndex(i)=CurrentFractal;
+   Results.SceneName{i}= SceneName{CurrentScene};
+   Results.FractalName{i}= FractalName{CurrentFractal};
+   Results.FractalAngle(i)=CurrentFractalAngle;
+   Results.MaxmumStepNumber(i)=CurrentTotalStepNumber;
+   Results.SeparationAngle(i)=CurrentSeparationAngle;
+   Results.StepNum(i)=StepIndex;
+   Results.ScenePointer(i)= ScenePointer;
+   Results.FractalLocFinal(:,i)=FractalLocFinal;
+   Results.SceneAngleFinal(i)=SceneAngleFinal;
+   Results.MouseLoc(:,:,i)=savedMouse;
+   Results.GuiDotsLoc(:,:,i)=Position_guideFinal;
+   Results.SelectAbsSection(:,i)=round(CurrentSeparationAngle/45)+1;
+  
+   if i<NumTrials
+   WaitSecs(ITI);%Start intertrial interval;
+   else
+   Screen('Close', window)   
+   end
+   
+end %End of the trial loop
+
+
+%Save results to file;
+Results.Subject=SubjectName;
+Results.TaskName="Human Guessing Location Task";
+Results.ConfigType=TaskConfigType;
+Results.TaskMode=StaircaseMode;
+Results.NumTrials=NumTrials;
+Results.UserMaxStep=UserMaxStep;
+Results.UserSceneRepetition=UserSceneRepetition;
+Results.RandomFlag=RandomFlag;
+Results.ITI=ITI;
+Results.ChooseShortTol=ChooseShortTol;
+
+Results.ScreenWidthInCM=ScreenWidthInCM;
+Results.ScreenHeightInCM=ScreenHeightInCM;
+Results.ViewingDistance=ViewingDistance;
+Results.Eccentricity_guide=Eccentricity_guide;
+
+Results.TolerantDev=TolerantDev;
+
+Results.FractalSizeCM=FractalSizeCM;
+Results.FractalSizeCM=FractalSizeCM;
+
+Results.FixationPointLoc=FixationPointLoc;
+%Save the results
+
+if ~TestMode
+ saveFilePath = [SaveFilePath SubjectName]; 
+ if ~exist(saveFilePath)
+ mkdir(saveFilePath);
+ end
+ cd(saveFilePath);
+ DateName=datestr(now,30);
+ NameStr=[SubjectName DateName '.mat'];
+save(NameStr,'Results');   
+ 
+end
+
+
+Priority(0);
+sca
+commandwindow;
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
